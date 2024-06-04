@@ -12,7 +12,7 @@ use isahc::{prelude::*, *};
 use lazy_static::lazy_static;
 pub use model::*;
 use regex::Regex;
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::RwLock, time::Duration};
 use urlqstring::QueryParams;
 
 lazy_static! {
@@ -43,10 +43,10 @@ const USER_AGENT_LIST: [&str; 14] = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/13.1058",
 ];
 
-#[derive(Clone)]
+
 pub struct MusicApi {
     client: HttpClient,
-    csrf: RefCell<String>,
+    csrf: RwLock<String>,
 }
 
 #[allow(unused)]
@@ -73,7 +73,7 @@ impl MusicApi {
             .expect("初始化网络请求失败!");
         Self {
             client,
-            csrf: RefCell::new(String::new()),
+            csrf: RwLock::new(String::new()),
         }
     }
 
@@ -88,7 +88,7 @@ impl MusicApi {
             .expect("初始化网络请求失败!");
         Self {
             client,
-            csrf: RefCell::new(String::new()),
+            csrf: RwLock::new(String::new()),
         }
     }
 
@@ -143,13 +143,13 @@ impl MusicApi {
         ua: &str,
         append_csrf: bool,
     ) -> Result<String> {
-        let mut csrf = self.csrf.borrow().to_owned();
+        let mut csrf = self.csrf.read().unwrap().to_owned();
         if csrf.is_empty() {
             if let Some(cookies) = self.cookie_jar() {
                 let uri = BASE_URL.parse().unwrap();
                 if let Some(cookie) = cookies.get_by_name(&uri, "__csrf") {
                     let __csrf = cookie.value().to_string();
-                    self.csrf.replace(__csrf.to_owned());
+                    *self.csrf.write().unwrap() = __csrf.to_owned();
                     csrf = __csrf;
                 }
             }
@@ -429,7 +429,7 @@ impl MusicApi {
     /// songlist_id: 歌单 id
     #[allow(unused)]
     pub async fn song_list_detail(&self, songlist_id: u64) -> Result<PlayListDetail> {
-        let csrf_token = self.csrf.borrow().to_owned();
+        let csrf_token = self.csrf.read().unwrap().to_owned();
         let path = "/weapi/v6/playlist/detail";
         let mut params = HashMap::new();
         let songlist_id = songlist_id.to_string();
@@ -475,7 +475,7 @@ impl MusicApi {
     #[allow(unused)]
     pub async fn songs_url(&self, ids: &[u64], br: &str) -> Result<Vec<SongUrl>> {
         // 使用 WEBAPI 获取音乐
-        // let csrf_token = self.csrf.borrow().to_owned();
+        // let csrf_token = self.csrf.read().unwrap().to_owned();
         // let path = "/weapi/song/enhance/player/url/v1";
         // let mut params = HashMap::new();
         // let ids = serde_json::to_string(ids)?;
@@ -873,7 +873,7 @@ impl MusicApi {
     /// music_id: 歌曲id
     #[allow(unused)]
     pub async fn song_lyric(&self, music_id: u64) -> Result<Lyrics> {
-        let csrf_token = self.csrf.borrow().to_owned();
+        let csrf_token = self.csrf.read().unwrap().to_owned();
         let path = "/weapi/song/lyric";
         let mut params = HashMap::new();
         let id = music_id.to_string();
