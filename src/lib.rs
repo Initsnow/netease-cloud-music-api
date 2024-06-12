@@ -557,7 +557,7 @@ impl MusicApi {
         params.insert("alg", "itembased");
         params.insert("trackId", songid.as_str());
         params.insert("like", like.as_str());
-        params.insert("time", "25");
+        params.insert("time", "3");
         if let Ok(result) = self
             .request(Method::Post, path, params, CryptoApi::Weapi, "", true)
             .await
