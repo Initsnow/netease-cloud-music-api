@@ -43,7 +43,6 @@ const USER_AGENT_LIST: [&str; 14] = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/13.1058",
 ];
 
-
 pub struct MusicApi {
     client: HttpClient,
     csrf: RwLock<String>,
@@ -185,6 +184,100 @@ impl MusicApi {
                         url = path.to_string();
                         Crypto::eapi(
                             "/api/song/enhance/player/url",
+                            &QueryParams::from_map(params).json(),
+                        )
+                    }
+                };
+
+                let request = Request::post(&url)
+                    .header("Cookie", "os=pc; appver=2.7.1.198277")
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.5")
+                    .header("Connection", "keep-alive")
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Host", "music.163.com")
+                    .header("Referer", "https://music.163.com")
+                    .header("User-Agent", user_agent)
+                    .body(body)
+                    .unwrap();
+                let mut response = self
+                    .client
+                    .send_async(request)
+                    .await
+                    .map_err(|_| anyhow!("none"))?;
+                response.text().await.map_err(|_| anyhow!("none"))
+            }
+            Method::Get => self
+                .client
+                .get_async(&url)
+                .await
+                .map_err(|_| anyhow!("none"))?
+                .text()
+                .await
+                .map_err(|_| anyhow!("none")),
+        }
+    }
+
+    /// 发送请求
+    /// method: 请求方法
+    /// base_url: 请求前缀
+    /// path: 请求路径
+    /// params: 请求参数
+    /// cryptoapi: 请求加密方式
+    /// ua: 要使用的 USER_AGENT_LIST
+    /// append_csrf: 是否在路径中添加 csrf
+    async fn request_url(
+        &self,
+        method: Method,
+        base_url: &str,
+        path: &str,
+        params: HashMap<&str, &str>,
+        cryptoapi: CryptoApi,
+        ua: &str,
+        append_csrf: bool,
+    ) -> Result<String> {
+        let mut csrf = self.csrf.read().unwrap().to_owned();
+        if csrf.is_empty() {
+            if let Some(cookies) = self.cookie_jar() {
+                let uri = base_url.parse().unwrap();
+                if let Some(cookie) = cookies.get_by_name(&uri, "__csrf") {
+                    let __csrf = cookie.value().to_string();
+                    *self.csrf.write().unwrap() = __csrf.to_owned();
+                    csrf = __csrf;
+                }
+            }
+        }
+        let mut url = format!("{}{}?csrf_token={}", base_url, path, csrf);
+        if !append_csrf {
+            url = format!("{}{}", base_url, path);
+        }
+        match method {
+            Method::Post => {
+                let user_agent = match cryptoapi {
+                    CryptoApi::LinuxApi => LINUX_USER_AGNET.to_string(),
+                    CryptoApi::Weapi => choose_user_agent(ua).to_string(),
+                    CryptoApi::Eapi => choose_user_agent(ua).to_string(),
+                };
+                let body = match cryptoapi {
+                    CryptoApi::LinuxApi => {
+                        let data = format!(
+                            r#"{{"method":"linuxapi","url":"{}","params":{}}}"#,
+                            url.replace("weapi", "api"),
+                            QueryParams::from_map(params).json()
+                        );
+                        Crypto::linuxapi(&data)
+                    }
+                    CryptoApi::Weapi => {
+                        let mut params = params;
+                        params.insert("csrf_token", &csrf);
+                        Crypto::weapi(&QueryParams::from_map(params).json())
+                    }
+                    CryptoApi::Eapi => {
+                        let mut params = params;
+                        params.insert("csrf_token", &csrf);
+                        // url = path.to_string();
+                        Crypto::eapi(
+                            path.replace("eapi", "api").as_str(),
                             &QueryParams::from_map(params).json(),
                         )
                     }
@@ -917,6 +1010,38 @@ impl MusicApi {
             .request(Method::Post, path, params, CryptoApi::Weapi, "", true)
             .await?;
         to_lyric(result)
+    }
+
+    /// 查询逐字歌词
+    /// music_id: 歌曲id
+    #[allow(unused)]
+    pub async fn song_lyric_new(&self, music_id: u64) -> Result<LyricsNew> {
+        let csrf_token = self.csrf.read().unwrap().to_owned();
+        let path = "/eapi/song/lyric/v1";
+        let mut params = HashMap::new();
+        let id = music_id.to_string();
+        params.insert("id", &id[..]);
+        params.insert("cp", "false");
+        params.insert("tv", "0");
+        params.insert("lv", "0");
+        params.insert("rv", "0");
+        params.insert("kv", "0");
+        params.insert("yv", "0");
+        params.insert("ytv", "0");
+        params.insert("yrv", "0");
+        params.insert("csrf_token", &csrf_token);
+        let result = self
+            .request_url(
+                Method::Post,
+                "https://interface3.music.163.com",
+                path,
+                params,
+                CryptoApi::Eapi,
+                "",
+                false,
+            )
+            .await?;
+        to_lyric_new(result)
     }
 
     /// 收藏/取消收藏歌单

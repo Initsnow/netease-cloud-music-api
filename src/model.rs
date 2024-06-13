@@ -92,6 +92,19 @@ pub struct Lyrics {
     pub tlyric: Vec<String>,
 }
 
+/// 歌词
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LyricsNew {
+    /// 歌词
+    pub lyric: Vec<String>,
+    /// 歌词翻译
+    pub tlyric: Option<Vec<String>>,
+    /// 逐字歌词
+    pub yrc: Option<Vec<String>>,
+    /// 罗马字
+    pub romalrc: Option<Vec<String>>,
+}
+
 #[allow(unused)]
 pub fn to_lyric(json: String) -> Result<Lyrics> {
     let value = &serde_json::from_str::<Value>(&json)?;
@@ -116,6 +129,81 @@ pub fn to_lyric(json: String) -> Result<Lyrics> {
             .filter(|s| !s.is_empty())
             .collect::<Vec<String>>();
         return Ok(Lyrics { lyric, tlyric });
+    }
+    Err(anyhow!("none"))
+}
+
+#[allow(unused)]
+pub fn to_lyric_new(json: String) -> Result<LyricsNew> {
+    let value = &serde_json::from_str::<Value>(&json)?;
+    let code: i64 = get_val!(value, "code")?;
+    if code == 200 {
+        let mut lyric: Vec<String>;
+        let lrc: String = get_val!(value, "lrc", "lyric")?;
+        lyric = lrc
+            .split('\n')
+            .collect::<Vec<&str>>()
+            .iter()
+            .map(|s| (*s).to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<String>>();
+
+        let mut tlyric: Option<Vec<String>> = if let core::result::Result::Ok(lrc) =
+            get_val!(value, "tlyric", "lyric") as Result<String, _>
+        {
+            let lrc: Vec<String> = lrc
+                .split('\n')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            if lrc.is_empty() {
+                None
+            } else {
+                Some(lrc)
+            }
+        } else {
+            None
+        };
+
+        let yrc: Option<Vec<String>> = if let core::result::Result::Ok(lrc) =
+            get_val!(value, "yrc", "lyric") as Result<String, _>
+        {
+            let lrc: Vec<String> = lrc
+                .split('\n')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            if lrc.is_empty() {
+                None
+            } else {
+                Some(lrc)
+            }
+        } else {
+            None
+        };
+
+        let mut romalrc: Option<Vec<String>> = if let core::result::Result::Ok(lrc) =
+            get_val!(value, "romalrc", "lyric") as Result<String, _>
+        {
+            let lrc: Vec<String> = lrc
+                .split('\n')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            if lrc.is_empty() {
+                None
+            } else {
+                Some(lrc)
+            }
+        } else {
+            None
+        };
+        return Ok(LyricsNew {
+            lyric,
+            tlyric,
+            yrc,
+            romalrc,
+        });
     }
     Err(anyhow!("none"))
 }
