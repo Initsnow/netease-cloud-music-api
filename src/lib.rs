@@ -200,6 +200,7 @@ impl MusicApi {
                     .header("User-Agent", user_agent)
                     .body(body)
                     .unwrap();
+                // dbg!(&request);
                 let mut response = self
                     .client
                     .send_async(request)
@@ -284,7 +285,7 @@ impl MusicApi {
                 };
 
                 let request = Request::post(&url)
-                    .header("Cookie", "os=pc; appver=2.7.1.198277")
+                    .header("Cookie", "os=android; appver=8.10.05")
                     .header("Accept", "*/*")
                     .header("Accept-Language", "en-US,en;q=0.5")
                     .header("Connection", "keep-alive")
@@ -567,19 +568,6 @@ impl MusicApi {
     ///    hr: 1900000
     #[allow(unused)]
     pub async fn songs_url(&self, ids: &[u64], br: &str) -> Result<Vec<SongUrl>> {
-        // 使用 WEBAPI 获取音乐
-        // let csrf_token = self.csrf.read().unwrap().to_owned();
-        // let path = "/weapi/song/enhance/player/url/v1";
-        // let mut params = HashMap::new();
-        // let ids = serde_json::to_string(ids)?;
-        // params.insert("ids", ids.as_str());
-        // params.insert("level", "standard");
-        // params.insert("encodeType", "aac");
-        // params.insert("csrf_token", &csrf_token);
-        // let result = self
-        //     .request(Method::Post, path, params, CryptoApi::Weapi, "")
-        //     .await?;
-
         // 使用 Eapi 获取音乐
         let path = "https://interface3.music.163.com/eapi/song/enhance/player/url";
         let mut params = HashMap::new();
@@ -588,6 +576,39 @@ impl MusicApi {
         params.insert("br", br);
         let result = self
             .request(Method::Post, path, params, CryptoApi::Eapi, "", true)
+            .await?;
+        to_song_url(result)
+    }
+
+    /// 歌曲 URL 新版
+    /// ids: 歌曲列表
+    /// level: 歌曲音质
+    ///     standard
+    ///     exhigh
+    ///     lossless
+    ///     hires
+    ///     jyeffect(高清环绕声)
+    ///     sky(沉浸环绕声)
+    ///     jymaster(超清母带)
+    #[allow(unused)]
+    pub async fn songs_url_v1(&self, ids: &[u64], level: &str) -> Result<Vec<SongUrl>> {
+        // 使用 Eapi 获取音乐
+        let path = "/eapi/song/enhance/player/url/v1";
+        let mut params = HashMap::new();
+        let ids = serde_json::to_string(ids)?;
+        params.insert("ids", ids.as_str());
+        params.insert("level", level);
+        params.insert("encodeType", "flac");
+        let result = self
+            .request_url(
+                Method::Post,
+                "https://interface3.music.163.com",
+                path,
+                params,
+                CryptoApi::Eapi,
+                "",
+                true,
+            )
             .await?;
         to_song_url(result)
     }
